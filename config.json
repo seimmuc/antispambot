@@ -1,0 +1,11 @@
+{
+  "JOIN_LIMIT": {
+    "time_window": 3.0,
+    "count_limit": 3
+  },
+  "MESSAGE_LIMIT": {
+    "time_window": 5.0,
+    "count_limit": 1
+  },
+  "ENABLE_MESSAGE_LIMIT": true
+}

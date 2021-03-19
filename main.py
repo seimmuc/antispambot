@@ -1,15 +1,10 @@
+import json
 import os
 import time
 import warnings
-from typing import List
+from typing import List, Dict, Any
 
-from discord import Client, Status, Member, Message, Intents, TextChannel
-
-
-JOIN_LIMIT = {'time_window': 3.0, 'count_limit': 3}
-MESSAGE_LIMIT = {'time_window': 5.0, 'count_limit': 1}    # very easy to hit for testing purposes
-
-ENABLE_MESSAGE_LIMIT = True
+from discord import Client, Status, Member, Message, Intents
 
 
 class ActivityLimit:
@@ -48,20 +43,21 @@ class RecentActivity:
 
 
 class AntiSpamBot(Client):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, config: Dict[str, Any], *args, **kwargs):
         intents = Intents(members=True, messages=True)
         super().__init__(intents=intents, *args, **kwargs)
+        self.enable_message_limit = config.get('ENABLE_MESSAGE_LIMIT', None) is True
         self.message_activity = RecentActivity(action_name='messages')
-        self.message_limit = ActivityLimit(**MESSAGE_LIMIT)
+        self.message_limit = ActivityLimit(**config['MESSAGE_LIMIT'])
         self.join_activity = RecentActivity(action_name='join')
-        self.join_limit = ActivityLimit(**JOIN_LIMIT)
+        self.join_limit = ActivityLimit(**config['JOIN_LIMIT'])
 
     async def on_ready(self):
         print(f'We have logged in as {self.user}')
 
     async def on_message(self, message: Message):
         print('on_message')
-        if not ENABLE_MESSAGE_LIMIT:
+        if not self.enable_message_limit:
             return
         self.message_activity.add_record(initiator=message.author.id, action_data={'text': message.content})
         if self.message_activity.over_limit(limit=self.message_limit):
@@ -79,22 +75,22 @@ class AntiSpamBot(Client):
         print(f'{member.name} left')
 
 
-def start_bot():
+def start_bot(config):
     bot_token = os.getenv('ANTISPAMBOT_TOKEN')
     if bot_token is None:
         print('missing ANTISPAMBOT_TOKEN environment variable')
         raise NoTokenError()
-    bot = AntiSpamBot(status=Status.idle)
+    bot = AntiSpamBot(config, status=Status.idle)
     bot.http.user_agent = 'AntiSpamBot/0.1'
     bot.run(bot_token, bot=True)
 
 
-def start_self_bot():
+def start_self_bot(config):
     warnings.warn('Running as self-bot, this is only used for testing purposes, proceed at your own risk')
     self_bot_token = os.getenv('SELF_BOT_TOKEN')
     if self_bot_token is None:
         raise NoTokenError()
-    bot = AntiSpamBot()
+    bot = AntiSpamBot(config)
     bot.http.user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/63.0.3239.132 Safari/537.36'
     bot.run(self_bot_token, bot=False)
 
@@ -104,11 +100,13 @@ class NoTokenError(RuntimeError):
 
 
 if __name__ == '__main__':
+    with open('config.json', 'rt', encoding='utf8') as f:
+        config = json.load(f)
     try:
-        start_bot()
+        start_bot(config)
     except NoTokenError:
         self_bot_enabled = os.getenv('ALLOW_SELF_BOT')
         if self_bot_enabled == 'true':
-            start_self_bot()
+            start_self_bot(config)
         else:
             exit(1)
