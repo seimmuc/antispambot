@@ -1,19 +1,82 @@
 import os
+import time
 import warnings
+from typing import List
 
-from discord import Client, Status, Message, Intents
+from discord import Client, Status, Member, Message, Intents, TextChannel
+
+
+JOIN_LIMIT = {'time_window': 3.0, 'count_limit': 3}
+MESSAGE_LIMIT = {'time_window': 5.0, 'count_limit': 1}    # very easy to hit for testing purposes
+
+ENABLE_MESSAGE_LIMIT = True
+
+
+class ActivityLimit:
+    def __init__(self, time_window: float, count_limit: int):
+        self.time_window = time_window
+        self.count_limit = count_limit
+
+
+class Record:
+    def __init__(self, timestamp: float, action_name: str, initiator: str = None, data=None):
+        self.timestamp = timestamp
+        self.action_name = action_name
+        self.initiator = initiator
+        self.data = data
+
+
+class RecentActivity:
+    def __init__(self, action_name: str):
+        self.action_name = action_name
+        self.activity: List[Record] = []
+
+    def add_record(self, action_name=None, initiator=None, action_data=None):
+        if action_name is None:
+            action_data = self.action_name
+        record = Record(timestamp=time.time(), action_name=action_name, initiator=initiator, data=action_data)
+        self.activity.append(record)
+
+    def purge_before(self, time_diff: float):
+        # Note: This is not thread-safe, but we're only dealing with async here. Everything should run in main thread.
+        timestamp = time.time() - time_diff
+        self.activity = [r for r in self.activity if r.timestamp > timestamp]
+
+    def over_limit(self, limit: ActivityLimit) -> bool:
+        self.purge_before(time_diff=limit.time_window)
+        return len(self.activity) > limit.count_limit
 
 
 class AntiSpamBot(Client):
     def __init__(self, *args, **kwargs):
-        intents = Intents(messages=True)
+        intents = Intents(members=True, messages=True)
         super().__init__(intents=intents, *args, **kwargs)
+        self.message_activity = RecentActivity(action_name='messages')
+        self.message_limit = ActivityLimit(**MESSAGE_LIMIT)
+        self.join_activity = RecentActivity(action_name='join')
+        self.join_limit = ActivityLimit(**JOIN_LIMIT)
 
     async def on_ready(self):
         print(f'We have logged in as {self.user}')
 
     async def on_message(self, message: Message):
         print('on_message')
+        if not ENABLE_MESSAGE_LIMIT:
+            return
+        self.message_activity.add_record(initiator=message.author.id, action_data={'text': message.content})
+        if self.message_activity.over_limit(limit=self.message_limit):
+            print('hit the text message limit')
+            # channel: TextChannel = message.channel
+            # await channel.send(content='hit the text message limit')
+
+    async def on_member_join(self, member: Member):
+        print(f'{member.name} joined')
+        self.join_activity.add_record(initiator=member.id)
+        if self.join_activity.over_limit(limit=self.join_limit):
+            print('hit the join limit')
+
+    async def on_member_remove(self, member: Member):
+        print(f'{member.name} left')
 
 
 def start_bot():
