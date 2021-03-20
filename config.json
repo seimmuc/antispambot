@@ -7,5 +7,5 @@
     "time_window": 5.0,
     "count_limit": 1
   },
-  "ENABLE_MESSAGE_LIMIT": true
+  "ENABLE_MESSAGE_LIMIT": false
 }

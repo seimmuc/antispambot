@@ -44,7 +44,7 @@ class RecentActivity:
 
 class AntiSpamBot(Client):
     def __init__(self, config: Dict[str, Any], *args, **kwargs):
-        intents = Intents(members=True, messages=True)
+        intents = Intents(members=True, messages=True, guilds=True)
         super().__init__(intents=intents, *args, **kwargs)
         self.enable_message_limit = config.get('ENABLE_MESSAGE_LIMIT', None) is True
         self.message_activity = RecentActivity(action_name='messages')
@@ -56,14 +56,15 @@ class AntiSpamBot(Client):
         print(f'We have logged in as {self.user}')
 
     async def on_message(self, message: Message):
-        print('on_message')
+        if message.author.id == self.user.id:
+            return
         if not self.enable_message_limit:
             return
         self.message_activity.add_record(initiator=message.author.id, action_data={'text': message.content})
         if self.message_activity.over_limit(limit=self.message_limit):
             print('hit the text message limit')
-            # channel: TextChannel = message.channel
-            # await channel.send(content='hit the text message limit')
+            await message.channel.send(content='hit the text message limit')
+            await message.delete()
 
     async def on_member_join(self, member: Member):
         print(f'{member.name} joined')
