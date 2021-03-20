@@ -105,16 +105,6 @@ def start_bot(config):
     bot.run(bot_token, bot=True)
 
 
-def start_self_bot(config):
-    warnings.warn('Running as self-bot, this is only used for testing purposes, proceed at your own risk')
-    self_bot_token = os.getenv('SELF_BOT_TOKEN')
-    if self_bot_token is None:
-        raise NoTokenError()
-    bot = AntiSpamBot(config)
-    bot.http.user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/63.0.3239.132 Safari/537.36'
-    bot.run(self_bot_token, bot=False)
-
-
 class NoTokenError(RuntimeError):
     pass
 
@@ -125,8 +115,4 @@ if __name__ == '__main__':
     try:
         start_bot(config)
     except NoTokenError:
-        self_bot_enabled = os.getenv('ALLOW_SELF_BOT')
-        if self_bot_enabled == 'true':
-            start_self_bot(config)
-        else:
-            exit(1)
+        exit(1)
