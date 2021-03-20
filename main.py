@@ -28,7 +28,7 @@ class RecentActivity:
 
     def add_record(self, action_name=None, initiator=None, action_data=None):
         if action_name is None:
-            action_data = self.action_name
+            action_name = self.action_name
         record = Record(timestamp=time.time(), action_name=action_name, initiator=initiator, data=action_data)
         self.activity.append(record)
 
