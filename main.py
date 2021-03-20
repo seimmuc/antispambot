@@ -49,8 +49,10 @@ class AntiSpamBot(Client):
         self.enable_message_limit = config.get('ENABLE_MESSAGE_LIMIT', None) is True
         self.message_activity = RecentActivity(action_name='messages')
         self.message_limit = ActivityLimit(**config['MESSAGE_LIMIT'])
+        self.message_limit_hit = False
         self.join_activity = RecentActivity(action_name='join')
         self.join_limit = ActivityLimit(**config['JOIN_LIMIT'])
+        self.join_limit_hit = False
 
     async def on_ready(self):
         print(f'We have logged in as {self.user}')
@@ -60,17 +62,34 @@ class AntiSpamBot(Client):
             return
         if not self.enable_message_limit:
             return
-        self.message_activity.add_record(initiator=message.author.id, action_data={'text': message.content})
+        self.message_activity.add_record(initiator=message.author.id, action_data={'message': message})
         if self.message_activity.over_limit(limit=self.message_limit):
             print('hit the text message limit')
+            if not self.message_limit_hit:
+                self.message_limit_hit = True
+                while self.message_activity.activity:
+                    message: Message = self.message_activity.activity.pop().data['message']
+                    await message.delete()
+            else:
+                await message.delete()
             await message.channel.send(content='hit the text message limit')
-            await message.delete()
+        else:
+            self.message_limit_hit = False
 
     async def on_member_join(self, member: Member):
         print(f'{member.name} joined')
-        self.join_activity.add_record(initiator=member.id)
+        self.join_activity.add_record(initiator=member.id, action_data={'member': member})
         if self.join_activity.over_limit(limit=self.join_limit):
             print('hit the join limit')
+            if not self.join_limit_hit:
+                self.join_limit_hit = True
+                while self.join_activity.activity:
+                    member: Member = self.join_activity.activity.pop().data['member']
+                    await member.kick(reason='raid protection')
+            else:
+                await member.kick(reason='raid protection')
+        else:
+            self.join_limit_hit = False
 
     async def on_member_remove(self, member: Member):
         print(f'{member.name} left')
